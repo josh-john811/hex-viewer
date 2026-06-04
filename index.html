@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0f1420">
+<meta name="format-detection" content="telephone=no">
+<!-- iOS "Add to Home Screen" support: launches full-screen, no Safari chrome -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Hex Viewer">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Crect width='180' height='180' rx='40' fill='%230f1420'/%3E%3Ctext x='50%25' y='54%25' font-family='monospace' font-size='62' font-weight='bold' fill='%235aa9ff' text-anchor='middle' dominant-baseline='middle'%3E0x%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Crect width='32' height='32' rx='6' fill='%230f1420'/%3E%3Ctext x='50%25' y='56%25' font-family='monospace' font-size='15' font-weight='bold' fill='%235aa9ff' text-anchor='middle' dominant-baseline='middle'%3E0x%3C/text%3E%3C/svg%3E">
+<title>Hex Viewer</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --panel: #171d2b;
+    --panel-2: #1e2536;
+    --border: #2a3550;
+    --text: #e3e8f3;
+    --muted: #8a96b3;
+    --accent: #5aa9ff;
+    --accent-2: #ffb454;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.4;
+    -webkit-tap-highlight-color: transparent;
+    /* keep clear of the notch / home indicator */
+    padding: calc(14px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right))
+             calc(20px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  .header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+  h1 { font-size: 20px; margin: 0; font-weight: 650; }
+  .sub { color: var(--muted); margin: 2px 0 20px; font-size: 13px; }
+
+  button { touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+  .resetbtn {
+    flex: none; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 9px; padding: 10px 14px; font-size: 13px; font-family: inherit; min-height: 40px;
+  }
+  .resetbtn:active { color: var(--text); border-color: #ff6b6b; }
+
+  /* inputs */
+  .inputs { display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .field .inputrow { display: flex; align-items: stretch; }
+  .field .prefix {
+    display: flex; align-items: center; padding: 0 14px;
+    background: var(--panel-2); border: 1px solid var(--border); border-right: none;
+    border-radius: 10px 0 0 10px; color: var(--muted); font-family: var(--mono); font-size: 17px;
+  }
+  .field input[type=text] {
+    flex: 1; min-width: 0;
+    background: var(--panel); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--mono); font-size: 19px; /* >=16px stops iOS zoom-on-focus */
+    padding: 13px 14px; border-radius: 0 10px 10px 0; outline: none;
+  }
+  .field input[type=text].no-prefix { border-radius: 10px; }
+  .field input:focus { border-color: var(--accent); }
+  .field input.invalid { border-color: #ff6b6b; }
+
+  /* controls: full-width segmented rows, finger-sized */
+  .controls { display: flex; flex-direction: column; gap: 16px; margin-bottom: 22px; }
+  .control { display: flex; flex-direction: column; gap: 7px; }
+  .control > span { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .seg { display: flex; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 4px; gap: 4px; }
+  .seg button {
+    flex: 1; background: none; border: none; color: var(--muted);
+    padding: 11px 6px; border-radius: 7px; font-size: 14px; font-family: inherit; min-height: 42px;
+  }
+  .seg button.active { background: var(--accent); color: #04122a; font-weight: 600; }
+
+  .rangerow { display: flex; align-items: center; gap: 8px; }
+  .rangein {
+    flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--mono); font-size: 17px;
+    padding: 11px 10px; border-radius: 9px; outline: none; text-align: center;
+  }
+  .rangein:focus { border-color: var(--accent); }
+  .rangerow .dash { color: var(--muted); }
+  .clearbtn {
+    flex: none; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 9px; padding: 11px 16px; font-size: 14px; font-family: inherit; min-height: 44px;
+  }
+  .clearbtn:active { color: var(--text); border-color: var(--accent-2); }
+
+  .err { color: #ff8585; font-size: 13px; min-height: 18px; margin-bottom: 8px; font-family: var(--mono); }
+
+  .binwrap { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px 14px 20px; }
+
+  .selresult {
+    margin-bottom: 18px; padding: 14px; border-radius: 12px;
+    background: linear-gradient(180deg, rgba(255,180,84,0.12), rgba(255,180,84,0.04));
+    border: 1px solid rgba(255,180,84,0.35);
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+  }
+  .selresult .big { font-family: var(--mono); font-size: 26px; color: var(--accent-2); font-weight: 650; }
+  .selresult .meta { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+  .selresult .meta b { color: var(--text); font-weight: 600; }
+  .selresult .spacer { flex: 1 1 auto; }
+
+  /* one byte per row; 8 bits fit comfortably on a phone */
+  .byte-rows { display: flex; flex-direction: column; gap: 22px; }
+  .byte-row { display: flex; flex-direction: column; gap: 4px; }
+  .byte-tag { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .byte-tag b { color: var(--accent-2); }
+
+  .bits { display: flex; gap: 6px; margin-top: 16px; }
+  .nibble { display: flex; gap: 3px; padding: 5px; border-radius: 8px; background: var(--panel-2); position: relative; }
+  .nibble-hex {
+    position: absolute; top: -15px; left: 50%; transform: translateX(-50%);
+    font-size: 10px; color: var(--muted); font-family: var(--mono);
+  }
+  .bit { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; }
+  .bit .num { font-size: 10px; color: var(--muted); font-family: var(--mono); height: 13px; }
+  .bit .val {
+    width: 100%; min-width: 28px; height: 42px; display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 19px; border-radius: 6px; user-select: none; -webkit-user-select: none;
+  }
+  .bit .val.one { background: var(--accent); color: #04122a; font-weight: 600; }
+  .bit .val.zero { background: #29324a; color: #6f7da0; }
+  .bit .val.sel { box-shadow: inset 0 0 0 2px var(--accent-2), 0 0 0 2px var(--accent-2); }
+  .bit .val:active { opacity: 0.7; }
+
+  .summary { display: flex; flex-direction: column; gap: 14px; margin-top: 24px; }
+  .summary .item { display: flex; flex-direction: column; gap: 4px; }
+  .summary .item .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .summary .item .vrow { display: flex; align-items: center; gap: 10px; }
+  .summary .item .v { font-family: var(--mono); font-size: 15px; word-break: break-all; }
+
+  .copybtn {
+    flex: none; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 7px; padding: 7px 12px; font-size: 12px; font-family: inherit; min-height: 34px;
+  }
+  .copybtn:active { color: var(--text); border-color: var(--accent); }
+  .copybtn.ok { color: #7be0a0; border-color: #7be0a0; }
+  .selresult .copybtn, .selresult .clearbtn { min-height: 38px; }
+
+  .hint { color: var(--muted); font-size: 12px; margin: 18px 0 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>Hex Viewer</h1>
+    <button id="resetAll" class="resetbtn" type="button">Reset</button>
+  </div>
+  <p class="sub">Nibble-grouped binary · big/little endian · MSB-0 / LSB-0.</p>
+
+  <div class="inputs">
+    <div class="field">
+      <label for="hex">Hexadecimal</label>
+      <div class="inputrow">
+        <span class="prefix">0x</span>
+        <input id="hex" type="text" spellcheck="false" autocomplete="off" autocorrect="off"
+               autocapitalize="characters" inputmode="text" placeholder="DEADBEEF">
+      </div>
+    </div>
+    <div class="field">
+      <label for="dec">Decimal (unsigned)</label>
+      <div class="inputrow">
+        <input id="dec" class="no-prefix" type="text" spellcheck="false" autocomplete="off"
+               autocorrect="off" inputmode="numeric" placeholder="3735928559">
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="control">
+      <span>Width</span>
+      <div class="seg" id="width">
+        <button data-w="8">8</button>
+        <button data-w="16">16</button>
+        <button data-w="32" class="active">32</button>
+        <button data-w="64">64</button>
+      </div>
+    </div>
+    <div class="control">
+      <span>Byte order</span>
+      <div class="seg" id="endian">
+        <button data-e="big" class="active">Big endian</button>
+        <button data-e="little">Little endian</button>
+      </div>
+    </div>
+    <div class="control">
+      <span>Bit numbering</span>
+      <div class="seg" id="numbering">
+        <button data-n="msb0" class="active">MSB 0</button>
+        <button data-n="lsb0">LSB 0</button>
+        <button data-n="none">None</button>
+      </div>
+    </div>
+    <div class="control">
+      <span>Bit range (type from / to)</span>
+      <div class="rangerow">
+        <input id="selFrom" class="rangein" type="text" inputmode="numeric" autocomplete="off" placeholder="from">
+        <span class="dash">&ndash;</span>
+        <input id="selTo" class="rangein" type="text" inputmode="numeric" autocomplete="off" placeholder="to">
+        <button id="selClear" class="clearbtn">Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="err" id="err"></div>
+
+  <div class="binwrap">
+    <div class="selresult" id="selResult" hidden></div>
+    <div class="byte-rows" id="byteRows"></div>
+    <div class="summary" id="summary"></div>
+    <p class="hint">Tap any bit to flip it. To read a range's hex, enter its From/To bit numbers above.</p>
+  </div>
+</div>
+
+<script>
+const state = {
+  value: 0n,      // BigInt, always the true numeric value (starts empty/zero)
+  width: 32,
+  endian: "big",
+  numbering: "msb0",
+  selLoD: null,   // selection low bound, as a DISPLAYED index (left=0)
+  selHiD: null,   // selection high bound, displayed index (inclusive)
+};
+
+let pristine = true;   // true until the user enters/edits a value; keeps inputs empty on load
+
+// builds a small "Copy" button that copies getText() and flashes confirmation
+function makeCopyBtn(getText) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "copybtn";
+  b.textContent = "Copy";
+  b.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const text = getText();
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); } catch {}
+      ta.remove();
+    }
+    b.textContent = "Copied!"; b.classList.add("ok");
+    setTimeout(() => { b.textContent = "Copy"; b.classList.remove("ok"); }, 1100);
+  });
+  return b;
+}
+
+const hexInput = document.getElementById("hex");
+const decInput = document.getElementById("dec");
+const errEl = document.getElementById("err");
+
+// displayed index <-> the label shown under the current numbering scheme
+function displayedToLabel(d) {
+  return state.numbering === "lsb0" ? (state.width - 1 - d) : d;
+}
+function labelToDisplayed(l) {
+  return state.numbering === "lsb0" ? (state.width - 1 - l) : l;
+}
+
+// bits as drawn, left-to-right; each: { char, weightPos }
+let displayedBits = [];
+
+function setSelectionD(a, b) {
+  state.selLoD = Math.min(a, b);
+  state.selHiD = Math.max(a, b);
+}
+function clearSelection() {
+  state.selLoD = state.selHiD = null;
+}
+
+function maskForWidth(w) { return (1n << BigInt(w)) - 1n; }
+
+// format a byte count with size prefixes; base 1000 (SI) or 1024 (IEC)
+const SI_UNITS  = ["B","KB","MB","GB","TB","PB","EB","ZB","YB"];
+const IEC_UNITS = ["B","KiB","MiB","GiB","TiB","PiB","EiB","ZiB","YiB"];
+function formatSize(bytes, base, units) {
+  let v = Number(bytes), i = 0;
+  while (v >= base && i < units.length - 1) { v /= base; i++; }
+  const num = i === 0 ? String(v) : v.toFixed(2).replace(/\.?0+$/, "");
+  return num + " " + units[i];
+}
+
+function clampToWidth() {
+  state.value &= maskForWidth(state.width);
+}
+
+// ---- input handlers ----
+hexInput.addEventListener("input", () => {
+  const raw = hexInput.value.trim().replace(/^0x/i, "");
+  if (raw === "") { pristine = true; setValue(0n, "hex"); errEl.textContent = ""; hexInput.classList.remove("invalid"); return; }
+  if (!/^[0-9a-fA-F]+$/.test(raw)) {
+    hexInput.classList.add("invalid");
+    errEl.textContent = "Not a valid hex number.";
+    return;
+  }
+  hexInput.classList.remove("invalid");
+  pristine = false;
+  let v = BigInt("0x" + raw);
+  checkOverflow(v);
+  setValue(v & maskForWidth(state.width), "hex");
+});
+
+decInput.addEventListener("input", () => {
+  const raw = decInput.value.trim().replace(/[, _]/g, "");
+  if (raw === "") { pristine = true; setValue(0n, "dec"); errEl.textContent = ""; decInput.classList.remove("invalid"); return; }
+  if (!/^\d+$/.test(raw)) {
+    decInput.classList.add("invalid");
+    errEl.textContent = "Not a valid decimal number.";
+    return;
+  }
+  decInput.classList.remove("invalid");
+  pristine = false;
+  let v = BigInt(raw);
+  checkOverflow(v);
+  setValue(v & maskForWidth(state.width), "dec");
+});
+
+function checkOverflow(v) {
+  if (v > maskForWidth(state.width)) {
+    errEl.textContent = `Value exceeds ${state.width}-bit range — truncated to low ${state.width} bits.`;
+  } else {
+    errEl.textContent = "";
+  }
+}
+
+// source = which field the user typed in (don't overwrite it mid-edit)
+function setValue(v, source) {
+  state.value = v;
+  render(source);
+}
+
+// ---- segmented controls ----
+function wireSeg(id, key, cast) {
+  const el = document.getElementById(id);
+  el.addEventListener("click", (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    [...el.children].forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    const raw = btn.dataset[Object.keys(btn.dataset)[0]];
+    state[key] = cast ? cast(raw) : raw;
+    if (key === "width") { clampToWidth(); clearSelection(); errEl.textContent = ""; }
+    render(null);
+  });
+}
+wireSeg("width", "width", Number);
+wireSeg("endian", "endian");
+wireSeg("numbering", "numbering");
+
+// ---- rendering ----
+function render(source) {
+  const w = state.width;
+  const hexDigits = w / 4;
+  const hexStr = state.value.toString(16).toUpperCase().padStart(hexDigits, "0");
+  const decStr = state.value.toString(10);
+
+  const blank = pristine && state.value === 0n;
+  if (source !== "hex") hexInput.value = blank ? "" : hexStr;
+  if (source !== "dec") decInput.value = blank ? "" : decStr;
+
+  // full binary string, MSB-first (bit index = position from the left, big-endian logical view)
+  const fullBin = state.value.toString(2).padStart(w, "0");
+
+  // Split into bytes, MSB byte first. byteIndex 0 = most significant byte.
+  const numBytes = w / 8;
+  let bytes = [];
+  for (let i = 0; i < numBytes; i++) {
+    const bitsStart = i * 8;
+    bytes.push({
+      msbByteIndex: i,                 // 0 = most significant
+      bits: fullBin.slice(bitsStart, bitsStart + 8),
+      weightHigh: w - 1 - bitsStart,   // numeric bit weight of this byte's MSB
+    });
+  }
+
+  // Little endian: least significant byte sits at the lowest memory address -> show it first.
+  let ordered = bytes.slice();
+  if (state.endian === "little" && numBytes > 1) {
+    ordered = bytes.slice().reverse();
+  }
+
+  const rowsEl = document.getElementById("byteRows");
+  rowsEl.innerHTML = "";
+  displayedBits = [];
+
+  let displayedIndex = 0; // counts bits as drawn, left to right
+  ordered.forEach((byte, memAddr) => {
+    const row = document.createElement("div");
+    row.className = "byte-row";
+
+    const byteVal = parseInt(byte.bits, 2);
+    const tag = document.createElement("div");
+    tag.className = "byte-tag";
+    const memLabel = numBytes > 1 ? `addr ${memAddr} · ` : "";
+    tag.innerHTML = `${memLabel}byte <b>${byteVal.toString(16).toUpperCase().padStart(2,"0")}</b> ` +
+                    `(MSbyte index ${byte.msbByteIndex})`;
+    row.appendChild(tag);
+
+    const bitsEl = document.createElement("div");
+    bitsEl.className = "bits";
+
+    for (let n = 0; n < 2; n++) {
+      const nibbleEl = document.createElement("div");
+      nibbleEl.className = "nibble";
+      const nibBits = byte.bits.slice(n * 4, n * 4 + 4);
+      const nibHex = parseInt(nibBits, 2).toString(16).toUpperCase();
+
+      const nh = document.createElement("div");
+      nh.className = "nibble-hex";
+      nh.textContent = nibHex;
+      nibbleEl.appendChild(nh);
+
+      for (let b = 0; b < 4; b++) {
+        const localPos = n * 4 + b;                  // 0..7 within byte, MSB-first
+        const weightPos = byte.weightHigh - localPos; // numeric bit weight (2^weightPos)
+        const bitChar = byte.bits[localPos];
+
+        const bitEl = document.createElement("div");
+        bitEl.className = "bit";
+
+        const num = document.createElement("div");
+        num.className = "num";
+        if (state.numbering === "msb0") {
+          num.textContent = displayedIndex;            // 0 at far left
+        } else if (state.numbering === "lsb0") {
+          num.textContent = (w - 1 - displayedIndex);  // 0 at far right
+        } else {
+          num.textContent = "";
+        }
+        bitEl.appendChild(num);
+
+        const d = displayedIndex; // capture for closures
+        const val = document.createElement("div");
+        val.className = "val " + (bitChar === "1" ? "one" : "zero");
+        if (state.selLoD !== null && d >= state.selLoD && d <= state.selHiD) {
+          val.classList.add("sel");
+        }
+        val.textContent = bitChar;
+        // tap to flip the bit
+        val.addEventListener("click", () => toggleBit(weightPos));
+
+        displayedBits.push({ char: bitChar, weightPos });
+        bitEl.appendChild(val);
+        nibbleEl.appendChild(bitEl);
+        displayedIndex++;
+      }
+      bitsEl.appendChild(nibbleEl);
+    }
+    row.appendChild(bitsEl);
+    rowsEl.appendChild(row);
+  });
+
+  renderSummary(hexStr, decStr, fullBin, numBytes, bytes);
+  renderSelection();
+}
+
+const selFrom = document.getElementById("selFrom");
+const selTo = document.getElementById("selTo");
+
+function renderSelection() {
+  const out = document.getElementById("selResult");
+  if (state.selLoD === null) {
+    out.hidden = true;
+    selFrom.value = ""; selTo.value = "";
+    return;
+  }
+  // keep the from/to fields in sync with the current numbering scheme
+  if (document.activeElement !== selFrom) selFrom.value = displayedToLabel(state.selLoD);
+  if (document.activeElement !== selTo)   selTo.value   = displayedToLabel(state.selHiD);
+
+  // extract bits in displayed order (leftmost selected bit = most significant)
+  const slice = displayedBits.slice(state.selLoD, state.selHiD + 1);
+  const bin = slice.map(b => b.char).join("");
+  const subVal = bin === "" ? 0n : BigInt("0b" + bin);
+  const nbits = slice.length;
+  const hexDigits = Math.ceil(nbits / 4);
+  const hex = subVal.toString(16).toUpperCase().padStart(hexDigits, "0");
+
+  const lblLo = displayedToLabel(state.selLoD);
+  const lblHi = displayedToLabel(state.selHiD);
+  const rangeTxt = `bits ${Math.min(lblLo,lblHi)}–${Math.max(lblLo,lblHi)} (${state.numbering.toUpperCase()})`;
+
+  out.hidden = false;
+  out.innerHTML =
+    `<span class="big">0x${hex}</span>` +
+    `<span class="meta"><b>${rangeTxt}</b></span>` +
+    `<span class="meta">${nbits} bit${nbits === 1 ? "" : "s"}</span>` +
+    `<span class="meta">0b ${bin.match(/.{1,4}/g).join(" ")}</span>` +
+    `<span class="meta">= ${subVal.toString(10)} dec</span>` +
+    `<span class="spacer"></span>`;
+  out.appendChild(makeCopyBtn(() => "0x" + hex));
+  const clr = document.createElement("button");
+  clr.type = "button";
+  clr.className = "clearbtn";
+  clr.textContent = "Clear";
+  clr.addEventListener("click", zeroSelectionBits);
+  out.appendChild(clr);
+}
+
+// reset the subselection pane back to its default (nothing selected)
+function resetSelectionPane() {
+  clearSelection();
+  render(null);
+}
+
+// zero out the currently selected bits in the value, keeping the selection active
+function zeroSelectionBits() {
+  if (state.selLoD === null) return;
+  pristine = false;
+  for (let d = state.selLoD; d <= state.selHiD; d++) {
+    state.value &= ~(1n << BigInt(displayedBits[d].weightPos));
+  }
+  render(null);
+}
+
+// from/to number inputs (values are in the current numbering scheme)
+function applyRangeInputs() {
+  const w = state.width;
+  const fv = selFrom.value.trim(), tv = selTo.value.trim();
+  if (fv === "" || tv === "") return;
+  if (!/^\d+$/.test(fv) || !/^\d+$/.test(tv)) return;
+  let lf = parseInt(fv, 10), lt = parseInt(tv, 10);
+  if (lf > w - 1 || lt > w - 1) return;
+  setSelectionD(labelToDisplayed(lf), labelToDisplayed(lt));
+  render(null);
+}
+selFrom.addEventListener("input", applyRangeInputs);
+selTo.addEventListener("input", applyRangeInputs);
+document.getElementById("selClear").addEventListener("click", resetSelectionPane);
+
+// activate the segmented-control button whose data attribute matches val
+function setSegActive(containerId, attr, val) {
+  const el = document.getElementById(containerId);
+  [...el.children].forEach(b => b.classList.toggle("active", b.dataset[attr] === String(val)));
+}
+
+// full reset: value, width, endian, numbering, selection — back to startup defaults
+function resetAll() {
+  state.value = 0n;
+  state.width = 32;
+  state.endian = "big";
+  state.numbering = "msb0";
+  clearSelection();
+  pristine = true;
+  errEl.textContent = "";
+  hexInput.classList.remove("invalid");
+  decInput.classList.remove("invalid");
+  setSegActive("width", "w", 32);
+  setSegActive("endian", "e", "big");
+  setSegActive("numbering", "n", "msb0");
+  render(null);
+}
+document.getElementById("resetAll").addEventListener("click", resetAll);
+
+function toggleBit(weightPos) {
+  pristine = false;
+  state.value ^= (1n << BigInt(weightPos));
+  clampToWidth();
+  errEl.textContent = "";
+  render(null);
+}
+
+function renderSummary(hexStr, decStr, fullBin, numBytes, bytes) {
+  const w = state.width;
+  const grouped = fullBin.match(/.{1,4}/g).join(" ");
+
+  // signed (two's complement) interpretation
+  let signed = state.value;
+  if ((state.value >> BigInt(w - 1)) & 1n) signed = state.value - (1n << BigInt(w));
+
+  const beBytes = bytes.map(b => parseInt(b.bits,2).toString(16).toUpperCase().padStart(2,"0"));
+  const leBytes = beBytes.slice().reverse();
+  const popcount = fullBin.split("").filter(c => c === "1").length;
+
+  const items = [
+    ["Hex", "0x" + hexStr],
+    ["Decimal (unsigned)", decStr],
+    ["Decimal (signed)", signed.toString(10)],
+    ["Octal", "0o" + state.value.toString(8)],
+    ["Size (SI / IEC)", `${formatSize(state.value, 1000, SI_UNITS)} / ${formatSize(state.value, 1024, IEC_UNITS)}`],
+    ["Binary (nibbles)", grouped],
+    ["Bytes · big endian", beBytes.join(" ")],
+    ["Bytes · little endian", leBytes.join(" ")],
+    ["Set bits (popcount)", `${popcount} of ${w}`],
+  ];
+  const el = document.getElementById("summary");
+  el.innerHTML = "";
+  items.forEach(([k, v]) => {
+    const item = document.createElement("div");
+    item.className = "item";
+    const key = document.createElement("span");
+    key.className = "k"; key.textContent = k;
+    const vrow = document.createElement("div");
+    vrow.className = "vrow";
+    const val = document.createElement("span");
+    val.className = "v"; val.textContent = v;
+    vrow.appendChild(val);
+    vrow.appendChild(makeCopyBtn(() => v));
+    item.appendChild(key);
+    item.appendChild(vrow);
+    el.appendChild(item);
+  });
+}
+
+render(null);
+</script>
+</body>
+</html>
