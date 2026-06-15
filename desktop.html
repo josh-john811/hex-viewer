@@ -193,8 +193,8 @@
     <div class="control">
       <span>Bit numbering</span>
       <div class="seg" id="numbering">
-        <button data-n="msb0" class="active">MSB 0</button>
-        <button data-n="lsb0">LSB 0</button>
+        <button data-n="msb0">MSB 0</button>
+        <button data-n="lsb0" class="active">LSB 0</button>
         <button data-n="none">None</button>
       </div>
     </div>
@@ -224,7 +224,7 @@ const state = {
   value: 0n,      // BigInt, always the true numeric value (starts empty/zero)
   width: 32,
   endian: "big",
-  numbering: "msb0",
+  numbering: "lsb0",
   selLoD: null,   // selection low bound, as a DISPLAYED index (left=0)
   selHiD: null,   // selection high bound, displayed index (inclusive)
 };
@@ -300,7 +300,8 @@ function clampToWidth() {
 
 // ---- input handlers ----
 hexInput.addEventListener("input", () => {
-  const raw = hexInput.value.trim().replace(/^0x/i, "");
+  // accept 0x prefix or a trailing h/H suffix (e.g. 0220H, 0180h)
+  const raw = hexInput.value.trim().replace(/^0x/i, "").replace(/[hH]$/, "");
   if (raw === "") { pristine = true; setValue(0n, "hex"); errEl.textContent = ""; hexInput.classList.remove("invalid"); return; }
   if (!/^[0-9a-fA-F]+$/.test(raw)) {
     hexInput.classList.add("invalid");
@@ -582,7 +583,7 @@ function resetAll() {
   state.value = 0n;
   state.width = 32;
   state.endian = "big";
-  state.numbering = "msb0";
+  state.numbering = "lsb0";
   clearSelection();
   pristine = true;
   errEl.textContent = "";
@@ -590,7 +591,7 @@ function resetAll() {
   decInput.classList.remove("invalid");
   setSegActive("width", "w", 32);
   setSegActive("endian", "e", "big");
-  setSegActive("numbering", "n", "msb0");
+  setSegActive("numbering", "n", "lsb0");
   render(null);
 }
 document.getElementById("resetAll").addEventListener("click", resetAll);
