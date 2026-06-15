@@ -96,6 +96,14 @@
   }
   .clearbtn:active { color: var(--text); border-color: var(--accent-2); }
 
+  .ops { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ops button {
+    flex: 1 0 auto; min-width: 56px; background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 9px; padding: 12px 10px; font-size: 15px; font-family: var(--mono); min-height: 46px;
+  }
+  .ops button:active:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .ops button:disabled { opacity: 0.4; }
+
   .err { color: #ff8585; font-size: 13px; min-height: 18px; margin-bottom: 8px; font-family: var(--mono); }
 
   .binwrap { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px 14px 20px; }
@@ -106,6 +114,7 @@
     border: 1px solid rgba(255,180,84,0.35);
     display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
   }
+  .selresult[hidden] { display: none; } /* beat the explicit display:flex above */
   .selresult .big { font-family: var(--mono); font-size: 26px; color: var(--accent-2); font-weight: 650; }
   .selresult .meta { font-family: var(--mono); font-size: 13px; color: var(--muted); }
   .selresult .meta b { color: var(--text); font-weight: 600; }
@@ -211,6 +220,17 @@
         <button id="selClear" class="clearbtn">Clear</button>
       </div>
     </div>
+    <div class="control">
+      <span>Operations</span>
+      <div class="ops" id="ops">
+        <button data-op="shl" title="Shift left by 1">&lt;&lt;</button>
+        <button data-op="shr" title="Shift right by 1 (logical)">&gt;&gt;</button>
+        <button data-op="rol" title="Rotate left by 1">ROL</button>
+        <button data-op="ror" title="Rotate right by 1">ROR</button>
+        <button data-op="not" title="Invert all bits">NOT</button>
+        <button data-op="swap" id="opSwap" title="Reverse byte order">Byte swap</button>
+      </div>
+    </div>
   </div>
 
   <div class="err" id="err"></div>
@@ -297,6 +317,39 @@ function formatSize(bytes, base, units) {
 function clampToWidth() {
   state.value &= maskForWidth(state.width);
 }
+
+// reverse byte order of v within the given bit width
+function byteSwapVal(v, w) {
+  const numBytes = w / 8;
+  let out = 0n;
+  let x = v;
+  for (let i = 0; i < numBytes; i++) { out = (out << 8n) | (x & 0xFFn); x >>= 8n; }
+  return out & maskForWidth(w);
+}
+
+// one-tap bitwise operations on the current value (all respect the width)
+function applyOp(op) {
+  const w = state.width, m = maskForWidth(w), wb = BigInt(w);
+  let v = state.value;
+  switch (op) {
+    case "shl":  v = (v << 1n) & m; break;                         // drop top bit, fill 0
+    case "shr":  v = v >> 1n; break;                               // logical right shift, fill 0
+    case "rol":  v = ((v << 1n) | (v >> (wb - 1n))) & m; break;    // top bit wraps to bottom
+    case "ror":  v = ((v >> 1n) | ((v & 1n) << (wb - 1n))) & m; break; // bottom bit wraps to top
+    case "not":  v = (~v) & m; break;                              // invert all bits
+    case "swap": v = byteSwapVal(v, w); break;                     // reverse byte order
+    default: return;
+  }
+  pristine = false;
+  state.value = v;
+  errEl.textContent = "";
+  render(null);
+}
+document.getElementById("ops").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b || b.disabled) return;
+  applyOp(b.dataset.op);
+});
 
 // ---- input handlers ----
 hexInput.addEventListener("input", () => {
@@ -464,6 +517,9 @@ function render(source) {
     row.appendChild(bitsEl);
     rowsEl.appendChild(row);
   });
+
+  const sw = document.getElementById("opSwap");
+  if (sw) sw.disabled = (numBytes < 2); // byte swap is a no-op on a single byte
 
   renderSummary(hexStr, decStr, fullBin, numBytes, bytes);
   renderSelection();
